@@ -231,11 +231,11 @@ summary(res)
 P604 <- results(dds, contrast=c("treat","P604", "Control"))
 table(P604$padj<0.1)
 ```
-# 0.1=97
+0.1=97
 <br>
-# 0.05=93
+0.05=93
 <br>
-# 0.01=77
+0.01=77
 ```{r}
 summary(P604)
 ```
@@ -302,8 +302,6 @@ head(go_input_P604)
 write.csv(go_input_P604, file="P604_GO.csv", quote=F, row.names=FALSE)
 ```
 
-
-
 ### get pvals
 <br>
 P values for P2553, FALSE values are where we have NAs
@@ -314,9 +312,8 @@ colnames(valP2553)=c("pval.P2553", "padj.P2553")
 length(valP2553[,1])
 table(complete.cases(valP2553))
 ```
-
-#FALSE  TRUE 
-#19473 22377
+FALSE  TRUE 
+19473 22377
 <br>
 And for P604
 ```{r}
@@ -328,8 +325,8 @@ table(complete.cases(valP604))
 ```
 
 
-#TRUE 
-#41850
+TRUE 
+41850
 <br>
 ### make rlogdata and pvals table
 
@@ -351,8 +348,8 @@ dim(rldpvals)
 table(complete.cases(rldpvals))
 ```
 
-#FALSE  TRUE 
-#19473 22377
+FALSE  TRUE 
+19473 22377
 <br>
 Save these values as csv to our workspace
 ```{r}
@@ -416,9 +413,9 @@ DOWN
 pdegs_down=union(P604_down,P2553_down)
 length(pdegs_down)
 ```
-#7
+7
 
-#ALL
+ALL
 ```{r}
 pdegs=union(P604_final,P2553_final)
 length(pdegs)
@@ -448,7 +445,7 @@ prettyvenn=venn.diagram(
 );
 grid.draw(prettyvenn)
 ```
-#Almost all overlap
+Almost all overlap
 
 ### heat map of sample distances for pco2
 <br>
@@ -482,7 +479,6 @@ pc1v <- round(li[1] * 100, 1)
 pc2v <- round(li[2] * 100, 1)
 pca_s <- as.data.frame(pca$x)
 head(pca_s)
-pca_s
 pca_s <- pca_s[,c(1,2)]
 pca_s$Samples = row.names(pca_s)
 pca_s$treat=x
@@ -508,7 +504,7 @@ ggplot(data = pca_s, aes(x = PC1, y = PC2, color = treat, pch = treat) ) + geom_
 adonis(pca$x ~ treat, data = pca_s, method='eu', na.rm = TRUE)
 ```
 
-# Go Enrichment of P604 vs Control:
+### Go Enrichment of P604 vs Control:
 
 make sure to change directory to GO_enrichment
 ```{r}
@@ -551,7 +547,7 @@ results=gomwuPlot(input,goAnnotations,goDivision,
 results
 ```
 
-# Go Enrichment of P2553 vs Control 
+### Go Enrichment of P2553 vs Control 
 ```{r}
 v=setwd("/Users/beccadecamp/Documents/school shit/Genetics spring 2019/part-3-RNAseq/GO_Enrichment")
 
@@ -592,7 +588,8 @@ results=gomwuPlot(input,goAnnotations,goDivision,
 results
 ```
 
-#No significant difference between PCs. 
+No significant difference between PCs. 
 
-#Conclusion: 
-Our DESeq analyses showed little differential gene expression in coral symbionts experiencing the two high acidity treatments compared to the control. We did not analyze temperature treatments due to the bleaching event that occurred in the 32 degree condition. This implies that Symbiodinium may have higher tolerance to varying acidity levels than to extreme temperature. Gene expression responses of symbionts in varying acidity treatments should be further invesitigated between the different reef sites to understand how the environment may control for gene expression levels.
+### Conclusion: 
+<br>
+Our DESeq analyses showed little differential gene expression in coral symbionts experiencing the two high acidity treatments compared to the control. We did not analyze temperature treatments due to the bleaching event that occurred in the 32 degree condition. This implies that Symbiodinium may have higher tolerance to varying acidity levels than to extreme temperature. Gene expression responses of symbionts in varying acidity treatments should be further invesitigated between the different reef sites to understand how the environment may control for gene expression levels. Results of the GO enrichment showed only 4 differentially genes in symbionts exposed to P604 treatment and 50 in those exposed to P2553. These results could indicate that the P2553 treatments were overwhelming the gene expression mechanisms, which is why we don't see that much gene expression variation compared to the P604 treatment. 
