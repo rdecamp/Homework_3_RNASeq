@@ -1,0 +1,598 @@
+title: "Homework 3: Investigating differentiation of gene expression in coral symbionts treated with varying acidity levels"
+author: "Mel Zarate, Christian Gagnon, Becca DeCamp"
+date: "4/4/2019"
+output: html_document
+
+Version Control: 
+R version: 3.5.2 "Egshell Igloo"
+Affycore Package 1.54.0
+ArrayQualityMetrics Package 3.38.0
+genefilter package 1.64.0
+DESeq package 1.34.1
+DESeq2 package 1.22.2
+dplyr package 0.8.0.1
+ggplot package 3.1.0
+ggrepel package 0.8.0
+vegan package 2.5-4
+tidyverse package 1.21
+VennDiagram package 1.6.20
+
+## Introduction 
+Fluctuations in temperature and acidity (pCO2) levels are having adverse effects on coral algae symbionts. This analysis builds off that of Davies et al. (2016), who found higher differentiation in coral host gene expression when exposed to extreme temperatures than extreme aciditiy levels. Using the same data collected, we analyzed differences in gene expression in coral symbionts exposed to varying acidity treatments and temperature treatments. Our analysis compares gene expression levels in P604 and P2553 treatments. Temperature data was not utilized, as the high temperature condition (T32) resulted in coral bleaching.
+
+## First, we will conduct array quality metrics to detect and remove outliers. 
+<br>
+Here are the packages we need:
+```{r}
+library(DESeq)
+library(affycoretools)
+library(arrayQualityMetrics)
+library(genefilter)
+```
+
+read in count data 
+```{r}
+countData <- read.table("raw_counts.txt")
+head(countData)
+length(countData[,1])
+```
+
+41850
+<br>
+### Our data frame looks good, so now we will manually call our treatments
+```{r}
+treat=c("Control", "T25",	"P324",	"P604",	"P2553",	"Control", "T25", "P324",	"P604",	"P2553")
+conditions=data.frame(treat)
+nrow(conditions) 
+ncol(countData)
+real=newCountDataSet(countData,conditions) 
+real=estimateSizeFactors(real)
+plot(sort(sizeFactors(real))) 
+```
+
+```{r}
+cds=estimateDispersions(real,method="blind")
+vsdBlind=varianceStabilizingTransformation(cds)
+```
+
+```{r}
+getwd()
+v=setwd("/Users/beccadecamp/Documents/school shit/Genetics spring 2019/part-3-RNAseq")
+arrayQualityMetrics(vsdBlind,outdir=v,intgroup=c("treat"), force=TRUE)
+```
+
+We only needed to run this code once and look for outliers. The analysis identfied FR_604 as an outlier. However, after looking at the plot we determined that it did not warrant being removed from our dataset. The decision was partly made on the basis that we could not afford to lose 1 of our 2 replicates for the P604 treatment.
+<br>
+Then, close R and restart with packages for DESeq2.
+
+```{r}
+library("DESeq2")
+library("ggplot2")
+```
+
+read in counts
+```{r}
+countData <- read.table("raw_counts.txt")
+head(countData)
+length(countData[,1])
+```
+
+Call treatment names without site information (nearshore and forereef)- we will only be looking at treatment.
+```{r}
+names(countData)=c( "Control", "T25",	"P324",	"P604",	"P2553",	"Control", "T25", "P324",	"P604",	"P2553")
+head(countData)
+```
+
+Look at counts in each treatment
+```{r}
+totalCounts=colSums(countData)
+totalCounts
+barplot(totalCounts, col=c("blue", "blue", "blue", "blue", "blue", "red", "red", "red", "red", "red"), ylab="raw counts")
+```
+
+
+Control      T25     P324     P604    P2553  Control      T25     P324     P604    P2553 
+<br>
+23609939 39927954 35040331 10462731 23263765 24272033 20538662 24127963 16830187 17129845 
+
+```{r}
+min(totalCounts) #10462731
+max(totalCounts)  #39927954
+```
+
+
+```{r}
+treat=c( "Control", "T25",	"P324",	"P604",	"P2553",	"Control", "T25", "P324",	"P604",	"P2553")
+g=data.frame(treat)
+g
+colData<- g
+```
+
+### Now testing for the main affects on gene expression in each treatment
+
+```{r}
+dds<-DESeqDataSetFromMatrix(countData=countData, colData=colData, design=~treat) 
+```
+one step DESeq
+```{r}
+dds<-DESeq(dds)
+```
+
+```{r}
+head(dds)
+res<- results(dds)
+```
+
+Look at dispersions plot
+```{r}
+plotDispEsts(dds, main="Dispersion plot Symbionts")
+```
+Models variance in gene expression from the mean for each gene
+<br>
+Control vs P2553 pairwise comparisons
+```{r}
+colData$NSP2553<-factor(colData$treat, levels=c("P2553","Control"))
+```
+second term is the "control"
+```{r}
+P2553 <- results(dds, contrast=c("treat","P2553","Control"))
+```
+
+Now we see how many FDR there are with an adjusted pvalue less than 0.1, 0.05, and 0.01
+```{r}
+table(P2553$padj<0.01)
+# 0.1=24
+# 0.05=20
+# 0.01=15
+summary(P2553)
+```
+
+```{r}
+nrow(P2553[P2553$padj<0.1 & !is.na(P2553$padj),])  
+# This gives the number significantly differentially expressed genes excluding the no/low count genes 
+```
+Plot normalized counts of these genes
+```{r}
+plotMA(P2553, main="Control vs Next Century pc02")
+plotMA(P2553, main="Control vs Next Century pc02", ylim=c(-2,2))
+```
+The orange dots here shows us the up and down regulated genes in relation to the control.
+We can then look at the exact number of up and down regulated genes:
+```{r}
+results <- as.data.frame(P2553)
+head(results)
+```
+Find up and down regulated genes with an adjusted pvalue below 0.1
+```{r}
+nrow(P2553[P2553$padj<0.1 & P2553$log2FoldChange > 0 & !is.na(P2553$padj),])
+nrow(P2553[P2553$padj<0.1 & P2553$log2FoldChange < 0 & !is.na(P2553$padj),])
+```
+UP in P2553 23
+<br>
+DOWN in P2553 1
+
+Save this to our workspace:
+```{r}
+write.table(P2553, file="P2553.txt", quote=F, sep="\t")
+cd <- read.table("P2553.txt")
+head(cd)
+```
+Use ggplot to visualize regulation again
+```{r}
+
+MAttPlot <- function(df) {
+	df$dotcol <- ifelse(df$log2FoldChange > 0 & df$padj < 0.1, 'darkorange',
+	ifelse(df$log2FoldChange < 0 & df$padj < 0.1, 'cyan3', 'black'))
+	df$baseMean <- log2(df$baseMean)
+	print(head(df))
+	gg <- ggplot(df, aes(baseMean, log2FoldChange)) +
+	geom_point(size = .3, color = df$dotcol) +
+	theme_bw() +
+	theme(panel.grid = element_blank())
+	print(gg)
+}
+
+MAttPlot(cd)
+```
+Similar to the last plot, this give us another visualization of relatively regulated genes. Orange dots above 0 are upregulated in control, while blue are down regulated. 
+<br>
+
+make the GO table for P2553 for GO enrichment analysis
+
+```{r}
+head(cd)
+cd$isogroup=row.names(cd)
+```
+
+ Use dplyr package to write csv file our of this dataframe.
+```{r}
+library(dplyr)
+go_input_P2553 = cd %>%
+  mutate(mutated_p = -log(pvalue)) %>%
+  mutate(mutated_p_updown = ifelse(log2FoldChange < 0, mutated_p*-1, mutated_p*1)) %>%
+  select(isogroup, mutated_p_updown) %>%
+  na.omit()
+```
+```{r}
+nrow(go_input_P2553)
+head(go_input_P2553)
+colnames(go_input_P2553) <- c("gene", "pval")
+head(go_input_P2553)
+write.csv(go_input_P2553, file="P2553_GO.csv", quote=F, row.names=FALSE)
+
+write.table(P2553, file="P2553.txt", quote=F, sep="\t")
+```
+
+
+Now we will do the same pairwise analysis comparing Control vs P604
+summary(P604)
+```{r}
+summary(res)
+P604 <- results(dds, contrast=c("treat","P604", "Control"))
+table(P604$padj<0.1)
+```
+# 0.1=97
+<br>
+# 0.05=93
+<br>
+# 0.01=77
+```{r}
+summary(P604)
+```
+```{r}
+plotMA(P604, main="Control vs P604")
+plotMA(P604, main="Control vs P604", ylim=c(-2,2))
+```
+Here, we see some more differentially regulated genes (red triangles) than we did in the P2553 analysis
+
+```{r}
+results <- as.data.frame(P604)
+head(results)
+```
+
+```{r}
+nrow(P604[P604$padj<0.1 & P604$log2FoldChange > 0 & !is.na(P604$padj),])
+nrow(P604[P604$padj<0.1 & P604$log2FoldChange < 0 & !is.na(P604$padj),])
+```
+UP in P604 90
+<br>
+DOWN in P604 7
+
+```{r}
+write.table(P604, file="P604.txt", quote=F, sep="\t")
+```
+
+
+```{r}
+cd <- read.table("P604.txt")
+head(cd)
+```
+
+```{r}
+MAttPlot <- function(df) {
+  df$dotcol <- ifelse(df$log2FoldChange > 0 & df$padj < 0.1, 'darkorange',
+                      ifelse(df$log2FoldChange < 0 & df$padj < 0.1, 'cyan3', 'black'))
+  df$baseMean <- log2(df$baseMean)
+  print(head(df))
+  gg <- ggplot(df, aes(baseMean, log2FoldChange)) +
+    geom_point(size = .3, color = df$dotcol) +
+    theme_bw() +
+    theme(panel.grid = element_blank())
+  print(gg)
+}
+
+MAttPlot(cd)
+```
+Again, a bit more differentiation shown here. 
+<br>
+
+make the GO table for P604
+```{r}
+head(cd)
+cd$isogroup=row.names(cd)
+library(dplyr)
+go_input_P604 = cd %>%
+  mutate(mutated_p = -log(pvalue)) %>%
+  mutate(mutated_p_updown = ifelse(log2FoldChange < 0, mutated_p*-1, mutated_p*1)) %>%
+  na.omit() %>%
+  select(isogroup, mutated_p_updown)
+head(go_input_P604)
+colnames(go_input_P604) <- c("gene", "pval")
+head(go_input_P604)
+write.csv(go_input_P604, file="P604_GO.csv", quote=F, row.names=FALSE)
+```
+
+
+
+### get pvals
+<br>
+P values for P2553, FALSE values are where we have NAs
+```{r}
+valP2553=cbind(P2553$pvalue, P2553$padj)
+head(valP2553)
+colnames(valP2553)=c("pval.P2553", "padj.P2553")
+length(valP2553[,1])
+table(complete.cases(valP2553))
+```
+
+#FALSE  TRUE 
+#19473 22377
+<br>
+And for P604
+```{r}
+valP604=cbind(P604$pvalue, P604$padj)
+head(valP604)
+colnames(valP604)=c("pval.P604", "padj.P604")
+length(valP604[,1])
+table(complete.cases(valP604))
+```
+
+
+#TRUE 
+#41850
+<br>
+### make rlogdata and pvals table
+
+```{r}
+rlog=rlogTransformation(dds, blind=TRUE) 
+rld=assay(rlog)
+head(rld)
+colnames(rld)=paste(colData$treat)
+head(rld)
+length(rld[,1])
+```
+
+```{r}
+rldpvals=cbind(rld,valP604, valP2553)
+dim(rldpvals)
+```
+# [1] 41850    14
+```{r}
+table(complete.cases(rldpvals))
+```
+
+#FALSE  TRUE 
+#19473 22377
+<br>
+Save these values as csv to our workspace
+```{r}
+write.csv(rldpvals, "HW3_Final_RLDandPVALS.csv", quote=F)
+```
+
+```{r}
+colnames(rld)=paste(colData$treat)
+head(rld)
+```
+Call treatments and create distance heatmap
+```{r}
+sampleDists <- dist(t(rld))
+sampleDistMatrix <- as.matrix( sampleDists )
+treat=c( "Control", "T25",	"P324",	"P604",	"P2553",	"Control", "T25", "P324",	"P604",	"P2553")
+#colnames(sampleDistMatrix)=paste(treat)
+#rownames(sampleDistMatrix)=paste(treat)
+```
+
+```{r}
+library("pheatmap")
+heat.colors = colorRampPalette(rev(c("blue","yellow","red")),bias=0.3)(100)
+pheatmap(sampleDistMatrix,color = heat.colors,cex=0.9,border_color=NA,cluster_rows=T,cluster_cols=T)
+```
+
+
+
+
+### VENN Diagram to include both up and down regulated genes in common for PC02
+
+```{r}
+library(VennDiagram)
+```
+
+Call up and down regulated genes (Pval<0.1) for each treatment
+```{r}
+P604_up=row.names(P604[P604$padj<0.1 & !is.na(P604$padj) & P604$log2FoldChange>0,])
+length(P604_up) #90
+P604_down=row.names(P604[P604$padj<0.1 & !is.na(P604$padj) & P604$log2FoldChange<0,])
+length(P604_down) #7
+P2553_up=row.names(P2553[P2553$padj<0.1 & !is.na(P2553$padj) & P2553$log2FoldChange>0,])
+length(P2553_up) #23
+P2553_down=row.names(P2553[P2553$padj<0.1 & !is.na(P2553$padj) & P2553$log2FoldChange<0,])
+length(P2553_down) #1
+```
+
+```{r}
+P604_final=row.names(P604[P604$padj<0.1 & !is.na(P604$padj),])
+P2553_final=row.names(P2553[P2553$padj<0.1 & !is.na(P2553$padj),])
+```
+Finding totals
+UP
+```{r}
+pdegs_up=union(P604_up,P2553_up)
+length(pdegs_up)
+```
+91
+<br>
+DOWN
+```{r}
+pdegs_down=union(P604_down,P2553_down)
+length(pdegs_down)
+```
+#7
+
+#ALL
+```{r}
+pdegs=union(P604_final,P2553_final)
+length(pdegs)
+```
+98
+<br>
+do UP, DOWN, ALL for Venn Diagram
+```{r}
+candidates=list("P604"=P604_up, "P2553"=P2553_up)
+quartz()
+prettyvenn=venn.diagram(
+  x = candidates,
+  filename=NULL,
+  col = "transparent",
+  fill = c("coral2", "forestgreen"),
+  alpha = 0.5,
+  # label.col = c("darkred", "white", "darkgreen", "white", "white", "white", "blue4"),
+  cex = 2.5,
+  fontfamily = "sans",
+  fontface = "bold",
+  cat.default.pos = "text",
+  cat.col = c("darkred", "darkgreen"),
+  cat.cex = 2.5,
+  cat.fontfamily = "sans",
+  cat.dist = c(0.1, 0.25),
+  cat.pos = 1
+);
+grid.draw(prettyvenn)
+```
+#Almost all overlap
+
+### heat map of sample distances for pco2
+<br>
+Read in values as dataframe
+```{r}
+rldpvals <- read.csv(file="HW3_Final_RLDandPVALS.csv", row.names=1)
+head(rldpvals)
+rld=rldpvals[,1:9]
+head(rld)
+```
+
+PCA for differentially expressed genes
+```{r}
+library(vegan)
+library(ggplot2)
+library(ggrepel)
+library(tidyverse)
+```
+
+```{r}
+#fixing dimensions of treatment data so we can bind it to the PCA
+x <- colData$treat[-10]
+x
+
+#actual PCA
+rld_t=t(rld)
+pca <- prcomp(rld_t,center = TRUE, scale. = TRUE, na.action=na.omit)
+head(pca)
+li <- pca$sdev^2 / sum(pca$sdev^2)
+pc1v <- round(li[1] * 100, 1)
+pc2v <- round(li[2] * 100, 1)
+pca_s <- as.data.frame(pca$x)
+head(pca_s)
+pca_s
+pca_s <- pca_s[,c(1,2)]
+pca_s$Samples = row.names(pca_s)
+pca_s$treat=x
+head(pca_s)
+
+```
+
+```{r}
+cbPalette <- c("darkgoldenrod2",  "darkolivegreen3", "dodgerblue3", "pink", "red")
+
+ggplot(data = pca_s, aes(x = PC1, y = PC2, color = treat, pch = treat) ) + geom_point(size=3, shape=3) + geom_text(aes(label = Samples)) +
+  geom_text_repel(aes(label=Samples)) +
+  scale_colour_manual(values=cbPalette) +
+  geom_density2d(alpha=.5)+
+  geom_polygon(alpha=.2)+
+  xlab(paste0("PC1: ",pc1v,"% variance")) +
+  ylab(paste0("PC2: ",pc2v,"% variance")) 
+  
+```
+
+```{r}
+#Checking for significance  
+adonis(pca$x ~ treat, data = pca_s, method='eu', na.rm = TRUE)
+```
+
+# Go Enrichment of P604 vs Control:
+
+make sure to change directory to GO_enrichment
+```{r}
+getwd()
+v=setwd("/Users/beccadecamp/Documents/school shit/Genetics spring 2019/part-3-RNAseq/GO_Enrichment")
+input="P604_GO.csv" # two columns of comma-separated values: gene id, continuous measure of significance. To perform standard GO enrichment analysis based on Fisher's exact test, use binary measure (0 or 1, i.e., either sgnificant or not).
+goAnnotations="sym_feb_iso2go.tab" # two-column, tab-delimited, one line per gene, multiple GO terms separated by semicolon. If you have multiple lines per gene, use nrify_GOtable.pl prior to running this script.
+goDatabase="go.obo" # download from http://www.geneontology.org/GO.downloads.ontology.shtml
+goDivision="CC" # either MF, or BP, or CC
+source("gomwu.functions.R")
+# Calculating stats. It might take ~3 min for MF and BP. Do not rerun it if you just want to replot the data with different cutoffs, go straight to gomwuPlot. If you change any of the numeric values below, delete the files that were generated in previos runs first.
+
+gomwuStats(input, goDatabase, goAnnotations, goDivision,
+	perlPath="perl", # replace with full path to perl executable if it is not in your system's PATH already
+	largest=0.1,  # a GO category will not be considered if it contains more than this fraction of the total number of genes
+	smallest=5,   # a GO category should contain at least this many genes to be considered
+	clusterCutHeight=0.25, # threshold for merging similar (gene-sharing) terms. See README for details.
+#	Alternative="g" # by default the MWU test is two-tailed; specify "g" or "l" of you want to test for "greater" or "less" instead. 
+#	Module=TRUE,Alternative="g" # un-remark this if you are analyzing a SIGNED WGCNA module (values: 0 for not in module genes, kME for in-module genes). In the call to gomwuPlot below, specify absValue=0.001 (count number of "good genes" that fall into the module)
+#	Module=TRUE # un-remark this if you are analyzing an UNSIGNED WGCNA module 
+)
+# do not continue if the printout shows that no GO terms pass 10% FDR.
+
+# Plotting results
+quartz()
+results=gomwuPlot(input,goAnnotations,goDivision,
+#	absValue=-log(0.05,10),  # genes with the measure value exceeding this will be counted as "good genes". Specify absValue=0.001 if you are doing Fisher's exact test for standard GO enrichment or analyzing a WGCNA module (all non-zero genes = "good genes").
+	absValue=1,
+	level1=0.1, # FDR threshold for plotting. Specify level1=1 to plot all GO categories containing genes exceeding the absValue.
+	level2=0.05, # FDR cutoff to print in regular (not italic) font.
+	level3=0.01, # FDR cutoff to print in large bold font.
+	txtsize=1.2,    # decrease to fit more on one page, or increase (after rescaling the plot so the tree fits the text) for better "word cloud" effect
+	treeHeight=0.5, # height of the hierarchical clustering tree
+#	colors=c("dodgerblue2","firebrick1","skyblue2","lightcoral") # these are default colors, un-remar and change if needed
+)
+# manually rescale the plot so the tree matches the text 
+# if there are too many categories displayed, try make it more stringent with level1=0.05,level2=0.01,level3=0.001.  
+
+# text representation of results, with actual adjusted p-values
+results
+```
+
+# Go Enrichment of P2553 vs Control 
+```{r}
+v=setwd("/Users/beccadecamp/Documents/school shit/Genetics spring 2019/part-3-RNAseq/GO_Enrichment")
+
+input="P2553_GO.csv" # two columns of comma-separated values: gene id, continuous measure of significance. To perform standard GO enrichment analysis based on Fisher's exact test, use binary measure (0 or 1, i.e., either sgnificant or not).
+goAnnotations="sym_feb_iso2go.tab" # two-column, tab-delimited, one line per gene, multiple GO terms separated by semicolon. If you have multiple lines per gene, use nrify_GOtable.pl prior to running this script.
+goDatabase="go.obo" # download from http://www.geneontology.org/GO.downloads.ontology.shtml
+goDivision="CC" # either MF, or BP, or CC
+source("gomwu.functions.R")
+# Calculating stats. It might take ~3 min for MF and BP. Do not rerun it if you just want to replot the data with different cutoffs, go straight to gomwuPlot. If you change any of the numeric values below, delete the files that were generated in previos runs first.
+
+gomwuStats(input, goDatabase, goAnnotations, goDivision,
+           perlPath="perl", # replace with full path to perl executable if it is not in your system's PATH already
+           largest=0.1,  # a GO category will not be considered if it contains more than this fraction of the total number of genes
+           smallest=5,   # a GO category should contain at least this many genes to be considered
+           clusterCutHeight=0.25, # threshold for merging similar (gene-sharing) terms. See README for details.
+           #	Alternative="g" # by default the MWU test is two-tailed; specify "g" or "l" of you want to test for "greater" or "less" instead. 
+           #	Module=TRUE,Alternative="g" # un-remark this if you are analyzing a SIGNED WGCNA module (values: 0 for not in module genes, kME for in-module genes). In the call to gomwuPlot below, specify absValue=0.001 (count number of "good genes" that fall into the module)
+           #	Module=TRUE # un-remark this if you are analyzing an UNSIGNED WGCNA module 
+)
+# do not continue if the printout shows that no GO terms pass 10% FDR.
+
+# Plotting results
+quartz()
+results=gomwuPlot(input,goAnnotations,goDivision,
+                  #	absValue=-log(0.05,10),  # genes with the measure value exceeding this will be counted as "good genes". Specify absValue=0.001 if you are doing Fisher's exact test for standard GO enrichment or analyzing a WGCNA module (all non-zero genes = "good genes").
+                  absValue=1,
+                  level1=0.1, # FDR threshold for plotting. Specify level1=1 to plot all GO categories containing genes exceeding the absValue.
+                  level2=0.05, # FDR cutoff to print in regular (not italic) font.
+                  level3=0.01, # FDR cutoff to print in large bold font.
+                  txtsize=1.2,    # decrease to fit more on one page, or increase (after rescaling the plot so the tree fits the text) for better "word cloud" effect
+                  treeHeight=0.5, # height of the hierarchical clustering tree
+                  #	colors=c("dodgerblue2","firebrick1","skyblue2","lightcoral") # these are default colors, un-remar and change if needed
+)
+# manually rescale the plot so the tree matches the text 
+# if there are too many categories displayed, try make it more stringent with level1=0.05,level2=0.01,level3=0.001.  
+
+# text representation of results, with actual adjusted p-values
+results
+```
+
+#No significant difference between PCs. 
+
+#Conclusion: 
+Our DESeq analyses showed little differential gene expression in coral symbionts experiencing the two high acidity treatments compared to the control. We did not analyze temperature treatments due to the bleaching event that occurred in the 32 degree condition. This implies that Symbiodinium may have higher tolerance to varying acidity levels than to extreme temperature. Gene expression responses of symbionts in varying acidity treatments should be further invesitigated between the different reef sites to understand how the environment may control for gene expression levels.
